@@ -38,6 +38,25 @@ SET body = $2, version = version + 1
 WHERE id = $1 AND version = $3;
 ```
 
+The shape that looks safe and is not: `UPDATE t SET taken = … WHERE id = (SELECT id FROM t WHERE
+free … LIMIT 1)`. The uncorrelated subquery runs once; a second session that blocks on the row
+lock re-checks only the outer `id = …` after the first commits, which still holds, so both callers
+are told they won. Repeat the predicate in the outer `WHERE` and add `FOR UPDATE SKIP LOCKED` to
+the subquery [PG transaction-iso; PG explicit-locking]:
+
+```sql
+UPDATE invites SET claimed_at = now()
+WHERE claimed_at IS NULL
+  AND id = (
+    SELECT id FROM invites
+    WHERE lower(email) = lower($1) AND claimed_at IS NULL
+    ORDER BY created_at
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+  )
+RETURNING id;
+```
+
 `FOR NO KEY UPDATE` when you update non-key columns: a plain `FOR UPDATE` blocks `FOR KEY
 SHARE`, which is exactly the lock a child-row insert takes on the parent [PG explicit-locking].
 `FOR UPDATE OF t` in a join locks only the table you intend to change.
