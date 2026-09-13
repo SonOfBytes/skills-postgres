@@ -1,0 +1,47 @@
+name: verify
+on: [push, pull_request]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install -r verify/requirements.txt
+      - name: frontmatter
+        run: python3 verify/check_frontmatter.py
+      - name: reference links
+        run: python3 verify/check_links.py
+      - name: sql blocks parse
+        run: python3 verify/check_sqlblocks.py
+      - name: sources listed and allowed
+        run: python3 verify/check_sources.py
+      - name: version markers
+        run: python3 verify/check_versions.py
+  pgx-seam:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pg: [16, 17, 18]
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg }}
+        env:
+          POSTGRES_PASSWORD: seam
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.26' }
+      - name: go seam compiles, vets, tests
+        working-directory: verify/pgx-seam
+        env:
+          # CI-only: a throwaway container on localhost. Production uses sslmode=verify-full
+          # (references/security.md).
+          PGX_SEAM_DATABASE_URL: postgres://postgres:seam@localhost:5432/postgres?sslmode=disable
+        run: gofmt -l . && go vet ./... && go test ./...
