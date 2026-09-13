@@ -1,8 +1,10 @@
 # Migration Recipes: The Safe Sequence for Each Change
 
 Each recipe names the unsafe form, the lock it takes, and the sequence that keeps the table
-online. All assume `SET lock_timeout` at the top of every session (`migrations.md`). Version
-markers say where a newer major shortens the recipe.
+online. All assume `SET LOCAL lock_timeout` at the top of the file (`migrations.md`). Version
+markers say where a newer major shortens the recipe. If the table is not live during the
+migration (`migrations.md`, "When the table is not live"), the plain form is the right one and
+the recipe is a note for later.
 
 ## Add a column
 
@@ -23,6 +25,19 @@ UPDATE videos SET first_seen_at = created_at
 WHERE id IN (
   SELECT id FROM videos WHERE first_seen_at IS NULL LIMIT 10000
 );
+```
+
+## Add a nullable column with a CHECK
+
+No rewrite: a nullable column without a default is a catalog change. The inline `CHECK` is
+verified against existing rows under the same `ACCESS EXCLUSIVE` lock; every existing row is
+NULL, so the scan passes and is brief on a small table. On a large live table add the `CHECK`
+`NOT VALID` and validate separately (below) [PG sql-altertable].
+
+```sql
+ALTER TABLE channel_approvals
+  ADD COLUMN pin_position smallint
+    CONSTRAINT check_channel_approvals_pin_position CHECK (pin_position BETWEEN 1 AND 3);
 ```
 
 ## Add an index on a live table

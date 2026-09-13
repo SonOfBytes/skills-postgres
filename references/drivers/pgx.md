@@ -48,9 +48,10 @@ The same through the URL: `?pool_max_conns=10&pool_max_conn_lifetime=1h&pool_max
 
 ## Queries
 
-- `pgx.CollectRows` with `pgx.RowToStructByName` (or `RowToStructByNameLax`) rather than
-  positional `rows.Scan` lists, which break silently when a column is added or reordered [pgx
-  docs].
+- `pgx.CollectRows` with `pgx.RowToStructByName` (or `RowToStructByNameLax`) for new code rather
+  than positional `rows.Scan` lists, which break silently when a column is added or reordered
+  [pgx docs]. In a store whose methods all scan positionally with an explicit column list beside
+  the scan, match the surrounding style; consistency in one package beats a mixed idiom.
 - `pgx.NamedArgs` when a query has many parameters; typed parameters (`uuid.UUID`, `[]int64`
   for `= ANY($1::bigint[])`, `time.Time` for `timestamptz`).
 - `numeric` scans into `pgtype.Numeric` or a decimal type, never `float64`; `timestamptz` scans

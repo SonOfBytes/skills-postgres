@@ -4,6 +4,16 @@ A migration is code that runs once against every environment in order, under loc
 undo. The per-statement safe sequences are in `migration-recipes.md`; this file is the physics
 and the process.
 
+## When the table is not live
+
+Everything below about `CONCURRENTLY`, `NOT VALID` and lock timeouts exists to keep a table
+readable and writable **while the migration runs**. If the deployment migrates before it serves
+(one instance, the migration gated by a deployment-only flag, no traffic until it completes), the
+table is not live, and the plain forms are correct and simpler: a `CREATE INDEX` inside the
+migration's transaction, a `NOT NULL` in one statement. Say which case you are in; the project's
+operations document usually states it. The recipes become mandatory the day a second replica or
+zero-downtime deploys arrive.
+
 ## Lock physics
 
 - Assume every `ALTER TABLE` takes `ACCESS EXCLUSIVE` unless you have checked the form; it is the
@@ -16,9 +26,14 @@ and the process.
   session sets `lock_timeout` and the runner retries with backoff and jitter [postgres.ai].
 
 ```sql
-SET lock_timeout = '2s';
+SET LOCAL lock_timeout = '2s';
 ALTER TABLE videos ADD COLUMN kind text NOT NULL DEFAULT 'video';
 ```
+
+`SET LOCAL` when the file runs inside a transaction (golang-migrate, goose and Flyway wrap a
+file by default); plain `SET` is fine on a dedicated migrator connection that closes afterwards.
+Either beats leaving it unset. A `SET` in a migration file is one of the legitimate uses of
+session `SET`; the rule against it (`transactions.md`) is about pooled application connections.
 
 - Roles: the migrator has a short `lock_timeout` (seconds) and a long `statement_timeout`
   (an hour, so a legitimate `VALIDATE` finishes); the application role the reverse
@@ -57,10 +72,12 @@ TRANSACTION`; Atlas `-- atlas:txmode none`; Flyway detects it; EF Core
   applied file changes; tools without checksums (golang-migrate) need the rule as policy. A
   documented exemption ("the first migration may be edited before the first deployment, and the
   exemption ends at that deployment") is legitimate; write it down [Flyway validate].
-- **Migrate as a release step, not at application start.** N replicas starting together race on
-  the migration lock; the release pipeline runs the migration once, then rolls the application
-  out. The application validates the schema at start or in readiness (below) [GitLab style
-  guide].
+- **Migrate as a release step, not on every application start.** N replicas starting together
+  race on the migration lock; the release pipeline runs the migration once, then rolls the
+  application out. A start-up migration gated by a flag that only the deployment sets, on a
+  single instance, *is* a release step; the problem is unconditional migration on every boot of
+  every replica. The application validates the schema at start or in readiness (below) [GitLab
+  style guide].
 - **Forward-only, or tested downs.** If down files exist, CI runs `up`, `down 1`, `up` on the
   newest pair; otherwise declare forward-only and roll forward with a compensating migration.
   Untested downs are the ones that fail at 3 a.m. [goose README].

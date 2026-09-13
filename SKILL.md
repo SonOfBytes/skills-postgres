@@ -36,6 +36,7 @@ If the major version cannot be determined, **ask**. Do not default to the newest
 | Model an entity, tenancy, polymorphism, soft delete vs hard delete, state machines, history | `references/modelling.md` |
 | Name tables, columns, indexes and constraints | `references/naming.md` |
 | Add or audit an index; choose B-tree, GIN, GiST, BRIN | `references/indexing.md` |
+| Change an existing query's ordering or predicate and name the index that serves it | `references/queries.md` then `references/indexing.md` |
 | Write a query: pagination, upsert, N+1, CTEs, LATERAL, reading EXPLAIN | `references/queries.md` |
 | Transactions, isolation, retries, locking, advisory locks, LISTEN/NOTIFY | `references/transactions.md` |
 | A job queue on `SKIP LOCKED`, staged job drain, idempotency keys | `references/queues.md` |
